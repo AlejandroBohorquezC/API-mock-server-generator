@@ -1,0 +1,9 @@
+{
+  "name": "@api-mock-generator/shared",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./types.ts"
+  },
+  "types": "./types.ts"
+}
