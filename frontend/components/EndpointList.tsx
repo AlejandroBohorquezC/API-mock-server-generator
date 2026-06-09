@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { fetchDocs } from '@/lib/api';
+import { track } from '@/lib/analytics';
 import type { ResourceDocs } from '@/types';
 
 const DEFAULT_BASE_URL =
@@ -51,6 +52,13 @@ function formatFieldsList(fields: Record<string, string>): string {
 
 function formatJsonExample(example: Record<string, unknown>): string {
   return JSON.stringify(example, null, 2);
+}
+
+function curlLabelToMethod(label: string): string {
+  if (label.startsWith('POST')) return 'POST';
+  if (label.startsWith('PUT')) return 'PUT';
+  if (label.startsWith('DELETE')) return 'DELETE';
+  return 'GET';
 }
 
 function buildCurlExamples(
@@ -110,10 +118,32 @@ export default function EndpointList({
       .catch((error: Error) => setDocsError(error.message));
   }, [sessionId]);
 
+  const mockBaseUrl = `${baseUrl}/mock/${sessionId}`;
+
   const copyToClipboard = async (text: string, key: string) => {
     await navigator.clipboard.writeText(text);
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const copyEndpoint = async (
+    fullUrl: string,
+    key: string,
+    method: HttpMethod,
+    resource: string,
+  ) => {
+    await copyToClipboard(fullUrl, key);
+    track('endpoint_copied', { method, resource });
+  };
+
+  const copyCurl = async (
+    command: string,
+    key: string,
+    label: string,
+    resource: string,
+  ) => {
+    await copyToClipboard(command, key);
+    track('curl_copied', { method: curlLabelToMethod(label), resource });
   };
 
   if (endpoints.length === 0) {
@@ -132,6 +162,30 @@ export default function EndpointList({
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="rounded-lg border border-zinc-200 bg-white p-4">
+        <p className="text-sm font-medium text-zinc-600">🔗 Base URL</p>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <code className="flex-1 break-all font-mono text-sm text-zinc-900">
+            {mockBaseUrl}
+          </code>
+          <button
+            type="button"
+            onClick={() => copyToClipboard(mockBaseUrl, 'mock-base-url')}
+            className="rounded border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+          >
+            {copiedKey === 'mock-base-url' ? '¡Copiado!' : 'Copy'}
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <p className="font-medium">⚠️ Your mock data is stored in memory.</p>
+        <p className="mt-1">
+          It will reset if the server restarts. This is expected behavior for
+          the MVP.
+        </p>
+      </div>
+
       <div className="flex flex-wrap items-center gap-3 rounded-lg bg-zinc-100 px-4 py-3">
         <span className="text-sm font-medium text-zinc-600">Session ID:</span>
         <code className="rounded bg-white px-2 py-1 font-mono text-sm text-zinc-800">
@@ -197,7 +251,9 @@ export default function EndpointList({
                         </code>
                         <button
                           type="button"
-                          onClick={() => copyToClipboard(fullUrl, key)}
+                          onClick={() =>
+                            copyEndpoint(fullUrl, key, endpoint.method, resource)
+                          }
                           className="rounded border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
                         >
                           {copiedKey === key ? '¡Copiado!' : 'Copiar'}
@@ -273,7 +329,12 @@ export default function EndpointList({
                             <button
                               type="button"
                               onClick={() =>
-                                copyToClipboard(curl.command, curlKey)
+                                copyCurl(
+                                  curl.command,
+                                  curlKey,
+                                  curl.label,
+                                  resource,
+                                )
                               }
                               className="rounded border border-zinc-600 px-2 py-0.5 text-xs text-zinc-300 hover:bg-zinc-800"
                             >
@@ -294,9 +355,6 @@ export default function EndpointList({
         )}
       </div>
 
-      <p className="text-sm text-amber-700">
-        Los datos se almacenan en memoria y se pierden al reiniciar el servidor.
-      </p>
     </div>
   );
 }

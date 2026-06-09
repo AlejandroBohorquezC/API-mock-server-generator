@@ -60,3 +60,21 @@ api-mock-generator/
 ├── shared/      # Tipos TypeScript compartidos
 └── README.md
 ```
+
+## Deployment
+
+### Frontend (Vercel)
+- Root directory: `frontend`
+- Framework: Next.js (auto-detected)
+- Environment variables:
+  - `NEXT_PUBLIC_API_URL`: URL of the deployed backend
+  - `NEXT_PUBLIC_POSTHOG_KEY`: PostHog project API key (optional)
+  - `NEXT_PUBLIC_POSTHOG_HOST`: PostHog host (default: https://app.posthog.com)
+
+### Backend (Render)
+- Root directory: `backend`
+- Build command: `npm install && npm run build`
+- Start command: `npm run start:prod`
+- Environment variables:
+  - `PORT`: 3000
+  - `FRONTEND_URL`: URL of the deployed frontend (for CORS)
