@@ -11,7 +11,12 @@ import {
   Put,
 } from '@nestjs/common';
 import { MockService } from './mock.service';
-import type { ApiResponse, RegisterPayload, ResourceData } from './mock.types';
+import type {
+  ApiResponse,
+  RegisterPayload,
+  ResourceData,
+  ResourceDocs,
+} from './mock.types';
 
 @Controller('mock')
 export class MockController {
@@ -29,6 +34,21 @@ export class MockController {
       };
     } catch (error) {
       return this.handleError(error);
+    }
+  }
+
+  @Get(':sessionId/docs')
+  getDocs(
+    @Param('sessionId') sessionId: string,
+  ): ApiResponse<Record<string, ResourceDocs>> {
+    try {
+      const docs = this.mockService.getDocs(sessionId);
+      return { success: true, data: docs };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'An error occurred',
+      };
     }
   }
 
