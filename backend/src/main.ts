@@ -6,8 +6,14 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
 
+  const allowedOrigins = process.env.FRONTEND_URL
+    ? [process.env.FRONTEND_URL, 'http://localhost:3001']
+    : ['http://localhost:3001'];
+
   app.enableCors({
-    origin: 'http://localhost:3001',
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type'],
   });
 
   app.use(express.json({ limit: '1mb' }));

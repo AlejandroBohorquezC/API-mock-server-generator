@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { registerSchema } from '@/lib/api';
+import { track } from '@/lib/analytics';
+import { EXAMPLE_JSON } from '@/lib/example-schema';
 import { clearSession, getOrCreateSessionId } from '@/lib/session';
 
-const EXAMPLE_JSON = `{
+const DEFAULT_JSON = `{
   "users": [{"id": 1, "name": "Alice"}],
   "products": [],
   "orders": []
@@ -12,13 +14,25 @@ const EXAMPLE_JSON = `{
 
 interface JsonEditorProps {
   onSuccess: (endpoints: string[]) => void;
+  initialValue?: string;
 }
 
-export default function JsonEditor({ onSuccess }: JsonEditorProps) {
-  const [jsonText, setJsonText] = useState(EXAMPLE_JSON);
+export default function JsonEditor({
+  onSuccess,
+  initialValue,
+}: JsonEditorProps) {
+  const [jsonText, setJsonText] = useState(initialValue ?? DEFAULT_JSON);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialValue !== undefined) {
+      setJsonText(initialValue);
+      setError(null);
+      setSubmitError(null);
+    }
+  }, [initialValue]);
 
   const isValidJson = (() => {
     if (!jsonText.trim()) return false;
@@ -57,6 +71,7 @@ export default function JsonEditor({ onSuccess }: JsonEditorProps) {
       const schema = JSON.parse(jsonText) as Record<string, unknown[]>;
       const sessionId = getOrCreateSessionId();
       const { endpoints } = await registerSchema(sessionId, schema);
+      track('api_generated', { resourceCount: endpoints.length });
       onSuccess(endpoints);
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : 'Failed to generate API');
@@ -66,7 +81,15 @@ export default function JsonEditor({ onSuccess }: JsonEditorProps) {
   };
 
   const handleClearSession = () => {
+    track('session_cleared');
     clearSession();
+    setJsonText(DEFAULT_JSON);
+    setError(null);
+    setSubmitError(null);
+  };
+
+  const handleLoadExample = () => {
+    track('example_loaded');
     setJsonText(EXAMPLE_JSON);
     setError(null);
     setSubmitError(null);
@@ -112,6 +135,13 @@ export default function JsonEditor({ onSuccess }: JsonEditorProps) {
           className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? 'Generando...' : 'Generar API'}
+        </button>
+        <button
+          type="button"
+          onClick={handleLoadExample}
+          className="rounded-lg border border-zinc-300 bg-white px-6 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+        >
+          Load Example
         </button>
         <button
           type="button"
