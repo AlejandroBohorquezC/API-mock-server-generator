@@ -1,52 +1,126 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { v4 as uuidv4 } from 'uuid';
-import type { MockStore, ResourceData } from './mock.types';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import type {
+  FieldType,
+  MockStore,
+  ResourceDocs,
+  ResourceMeta,
+  ResourceSchema,
+} from './mock.types';
+
+const MAX_RESOURCES_PER_SESSION = 20;
+const MAX_ITEMS_PER_RESOURCE = 1000;
+const MAX_FIELDS_PER_RESOURCE = 50;
+const RESOURCE_NAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_]{0,49}$/;
 
 @Injectable()
 export class MockService {
   private store: Map<string, MockStore> = new Map();
 
-  register(sessionId: string, schema: Record<string, ResourceData[]>): string[] {
+  register(
+    sessionId: string,
+    schema: Record<string, Record<string, unknown>[]>,
+  ): string[] {
+    if (Object.keys(schema).length > MAX_RESOURCES_PER_SESSION) {
+      throw new BadRequestException(
+        `Maximum ${MAX_RESOURCES_PER_SESSION} resources per session`,
+      );
+    }
+
+    for (const name of Object.keys(schema)) {
+      if (!RESOURCE_NAME_REGEX.test(name)) {
+        throw new BadRequestException(
+          `Invalid resource name: "${name}". Only letters, numbers and underscores allowed. Must start with a letter.`,
+        );
+      }
+    }
+
+    for (const [name, items] of Object.entries(schema)) {
+      if (items.length > MAX_ITEMS_PER_RESOURCE) {
+        throw new BadRequestException(
+          `Resource "${name}" exceeds maximum of ${MAX_ITEMS_PER_RESOURCE} initial items`,
+        );
+      }
+    }
+
     const mockStore: MockStore = {};
-    const resources: string[] = [];
 
     for (const [resourceName, items] of Object.entries(schema)) {
-      const initialData = items.map((item) => ({
-        ...item,
-        ...(item.id !== undefined ? { id: String(item.id) } : {}),
-      }));
-      mockStore[resourceName] = { data: initialData };
-      resources.push(resourceName);
+      const resourceSchema = this.inferSchema(items);
+      const { data, nextId } = this.prepareInitialData(items);
+
+      mockStore[resourceName] = {
+        data,
+        schema: resourceSchema,
+        nextId,
+      };
     }
 
     this.store.set(sessionId, mockStore);
-    return resources;
+    return Object.keys(schema);
   }
 
-  getAll(sessionId: string, resource: string): ResourceData[] {
-    return [...this.getResourceData(sessionId, resource)];
+  getAll(sessionId: string, resource: string): Record<string, unknown>[] {
+    return [...this.getResourceMeta(sessionId, resource).data];
   }
 
   getOne(
     sessionId: string,
     resource: string,
     id: string,
-  ): ResourceData | undefined {
-    const data = this.getResourceData(sessionId, resource);
-    return data.find((item) => String(item.id) === String(id));
+  ): Record<string, unknown> | undefined {
+    const meta = this.getResourceMeta(sessionId, resource);
+    const item = meta.data.find((entry) => String(entry.id) === String(id));
+    if (!item) {
+      throw new NotFoundException({
+        success: false,
+        error: `Item with id '${id}' not found in '${resource}'`,
+        details: { resource, id },
+      });
+    }
+    return item;
   }
 
   create(
     sessionId: string,
     resource: string,
-    body: ResourceData,
-  ): ResourceData {
-    const data = this.getResourceData(sessionId, resource);
-    const newItem: ResourceData = {
+    body: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const meta = this.getResourceMeta(sessionId, resource);
+    const schemaFields = Object.keys(meta.schema);
+
+    if (schemaFields.length > 0) {
+      const bodyKeys = Object.keys(body).filter((key) => key !== 'id');
+      const invalidFields = bodyKeys.filter(
+        (key) => !schemaFields.includes(key),
+      );
+
+      if (invalidFields.length > 0) {
+        throw new BadRequestException({
+          success: false,
+          error: 'Invalid fields detected',
+          details: { invalidFields },
+        });
+      }
+
+      const missingFields = schemaFields.filter((key) => !(key in body));
+      if (missingFields.length > 0) {
+        throw new BadRequestException({
+          success: false,
+          error: 'Missing required fields',
+          details: { missingFields },
+        });
+      }
+    }
+
+    const newItem: Record<string, unknown> = {
       ...body,
-      id: body.id !== undefined ? String(body.id) : uuidv4(),
+      id: meta.nextId++,
     };
-    data.push(newItem);
+    meta.data.push(newItem);
     return newItem;
   }
 
@@ -54,29 +128,57 @@ export class MockService {
     sessionId: string,
     resource: string,
     id: string,
-    body: ResourceData,
-  ): ResourceData | undefined {
-    const data = this.getResourceData(sessionId, resource);
-    const index = data.findIndex((item) => String(item.id) === String(id));
-    if (index === -1) {
-      return undefined;
+    body: Record<string, unknown>,
+  ): Record<string, unknown> | undefined {
+    const meta = this.getResourceMeta(sessionId, resource);
+    const schemaFields = Object.keys(meta.schema);
+
+    const { id: _ignoredId, ...bodyWithoutId } = body;
+
+    if (schemaFields.length > 0) {
+      const bodyKeys = Object.keys(bodyWithoutId);
+      const invalidFields = bodyKeys.filter(
+        (key) => !schemaFields.includes(key),
+      );
+
+      if (invalidFields.length > 0) {
+        throw new BadRequestException({
+          success: false,
+          error: 'Invalid fields detected',
+          details: { invalidFields },
+        });
+      }
     }
-    const updated: ResourceData = {
-      ...data[index],
-      ...body,
-      id: String(id),
+
+    const index = meta.data.findIndex((item) => String(item.id) === String(id));
+    if (index === -1) {
+      throw new NotFoundException({
+        success: false,
+        error: `Item with id '${id}' not found in '${resource}'`,
+        details: { resource, id },
+      });
+    }
+
+    const updated: Record<string, unknown> = {
+      ...meta.data[index],
+      ...bodyWithoutId,
+      id: meta.data[index].id,
     };
-    data[index] = updated;
+    meta.data[index] = updated;
     return updated;
   }
 
   remove(sessionId: string, resource: string, id: string): boolean {
-    const data = this.getResourceData(sessionId, resource);
-    const index = data.findIndex((item) => String(item.id) === String(id));
+    const meta = this.getResourceMeta(sessionId, resource);
+    const index = meta.data.findIndex((item) => String(item.id) === String(id));
     if (index === -1) {
-      return false;
+      throw new NotFoundException({
+        success: false,
+        error: `Item with id '${id}' not found in '${resource}'`,
+        details: { resource, id },
+      });
     }
-    data.splice(index, 1);
+    meta.data.splice(index, 1);
     return true;
   }
 
@@ -85,20 +187,160 @@ export class MockService {
     return Object.keys(session);
   }
 
+  getDocs(sessionId: string): Record<string, ResourceDocs> {
+    const session = this.getSession(sessionId);
+    const docs: Record<string, ResourceDocs> = {};
+
+    for (const [resourceName, meta] of Object.entries(session)) {
+      const fields: Record<string, FieldType> = {};
+      const requiredFields: string[] = [];
+
+      for (const [fieldName, definition] of Object.entries(meta.schema)) {
+        fields[fieldName] = definition.type;
+        if (definition.required) {
+          requiredFields.push(fieldName);
+        }
+      }
+
+      const example = this.buildExample(meta.schema);
+      const base = `/mock/${sessionId}/${resourceName}`;
+
+      docs[resourceName] = {
+        fields,
+        requiredFields,
+        endpoints: [
+          `GET ${base}`,
+          `POST ${base}`,
+          `GET ${base}/:id`,
+          `PUT ${base}/:id`,
+          `DELETE ${base}/:id`,
+        ],
+        examplePost: example,
+        examplePut: example,
+      };
+    }
+
+    return docs;
+  }
+
+  private inferSchema(items: Record<string, unknown>[]): ResourceSchema {
+    if (items.length === 0) {
+      return {};
+    }
+
+    const firstItem = items[0];
+    const schema: ResourceSchema = {};
+
+    for (const [fieldName, value] of Object.entries(firstItem)) {
+      if (fieldName === 'id') {
+        continue;
+      }
+
+      let type: FieldType;
+      switch (typeof value) {
+        case 'number':
+          type = 'number';
+          break;
+        case 'boolean':
+          type = 'boolean';
+          break;
+        case 'string':
+          type = 'string';
+          break;
+        default:
+          type = 'unknown';
+      }
+
+      schema[fieldName] = { type, required: true };
+    }
+
+    if (Object.keys(schema).length > MAX_FIELDS_PER_RESOURCE) {
+      throw new BadRequestException(
+        `Resource exceeds maximum of ${MAX_FIELDS_PER_RESOURCE} fields`,
+      );
+    }
+
+    return schema;
+  }
+
+  private prepareInitialData(items: Record<string, unknown>[]): {
+    data: Record<string, unknown>[];
+    nextId: number;
+  } {
+    if (items.length === 0) {
+      return { data: [], nextId: 1 };
+    }
+
+    let maxId = 0;
+    for (const item of items) {
+      if (item.id !== undefined) {
+        const numId = Number(item.id);
+        if (!isNaN(numId)) {
+          maxId = Math.max(maxId, numId);
+        }
+      }
+    }
+
+    let assignId = maxId > 0 ? maxId + 1 : 1;
+    const data = items.map((item) => {
+      if (item.id !== undefined) {
+        return { ...item };
+      }
+      const withId = { ...item, id: assignId };
+      assignId++;
+      return withId;
+    });
+
+    return { data, nextId: assignId };
+  }
+
+  private buildExample(schema: ResourceSchema): Record<string, unknown> {
+    const example: Record<string, unknown> = {};
+
+    for (const [fieldName, definition] of Object.entries(schema)) {
+      switch (definition.type) {
+        case 'string':
+          example[fieldName] = 'string';
+          break;
+        case 'number':
+          example[fieldName] = 0;
+          break;
+        case 'boolean':
+          example[fieldName] = false;
+          break;
+        default:
+          example[fieldName] = 'string';
+      }
+    }
+
+    return example;
+  }
+
   private getSession(sessionId: string): MockStore {
     const session = this.store.get(sessionId);
     if (!session) {
-      throw new NotFoundException(`Session "${sessionId}" not found`);
+      throw new NotFoundException({
+        success: false,
+        error: 'Session not found',
+        details: { sessionId },
+      });
     }
     return session;
   }
 
-  private getResourceData(sessionId: string, resource: string): ResourceData[] {
+  private getResourceMeta(sessionId: string, resource: string): ResourceMeta {
     const session = this.getSession(sessionId);
-    const mockResource = session[resource];
-    if (!mockResource) {
-      throw new NotFoundException(`Resource "${resource}" not found`);
+    const meta = session[resource];
+    if (!meta) {
+      throw new NotFoundException({
+        success: false,
+        error: `Resource '${resource}' does not exist in this session`,
+        details: {
+          resource,
+          availableResources: Object.keys(session),
+        },
+      });
     }
-    return mockResource.data;
+    return meta;
   }
 }

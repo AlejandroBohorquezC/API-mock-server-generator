@@ -1,4 +1,4 @@
-import type { ApiResponse } from '@/types';
+import type { ApiResponse, ResourceDocs } from '@/types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -20,6 +20,20 @@ export async function registerSchema(
   }
 
   return { endpoints: result.data.endpoints };
+}
+
+export async function fetchDocs(
+  sessionId: string,
+): Promise<Record<string, ResourceDocs>> {
+  const response = await fetch(`${BASE_URL}/mock/${sessionId}/docs`);
+  const result: ApiResponse<Record<string, ResourceDocs>> =
+    await response.json();
+
+  if (!response.ok || !result.success || !result.data) {
+    throw new Error(result.error ?? 'Failed to fetch docs');
+  }
+
+  return result.data;
 }
 
 export async function callEndpoint(
