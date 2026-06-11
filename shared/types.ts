@@ -1,6 +1,13 @@
 export type ResourceData = Record<string, unknown>;
 
-export type FieldType = 'string' | 'number' | 'boolean' | 'unknown';
+export type FieldType =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'object'
+  | 'array'
+  | 'null'
+  | 'unknown';
 
 export interface ResourceDocs {
   fields: Record<string, FieldType>;

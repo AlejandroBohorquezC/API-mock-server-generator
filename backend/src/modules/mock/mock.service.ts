@@ -38,7 +38,23 @@ export class MockService {
       }
     }
 
-    for (const [name, items] of Object.entries(schema)) {
+    const normalizedSchema: Record<string, Record<string, unknown>[]> = {};
+
+    for (const [resourceName, value] of Object.entries(
+      schema as Record<string, unknown>,
+    )) {
+      if (Array.isArray(value)) {
+        normalizedSchema[resourceName] = value;
+      } else if (value !== null && typeof value === 'object') {
+        normalizedSchema[resourceName] = [value as Record<string, unknown>];
+      } else {
+        throw new BadRequestException(
+          `Resource "${resourceName}" must be an object or an array of objects`,
+        );
+      }
+    }
+
+    for (const [name, items] of Object.entries(normalizedSchema)) {
       if (items.length > MAX_ITEMS_PER_RESOURCE) {
         throw new BadRequestException(
           `Resource "${name}" exceeds maximum of ${MAX_ITEMS_PER_RESOURCE} initial items`,
@@ -48,7 +64,7 @@ export class MockService {
 
     const mockStore: MockStore = {};
 
-    for (const [resourceName, items] of Object.entries(schema)) {
+    for (const [resourceName, items] of Object.entries(normalizedSchema)) {
       const resourceSchema = this.inferSchema(items);
       const { data, nextId } = this.prepareInitialData(items);
 
@@ -60,7 +76,7 @@ export class MockService {
     }
 
     this.store.set(sessionId, mockStore);
-    return Object.keys(schema);
+    return Object.keys(normalizedSchema);
   }
 
   getAll(sessionId: string, resource: string): Record<string, unknown>[] {
@@ -114,6 +130,8 @@ export class MockService {
           details: { missingFields },
         });
       }
+
+      this.validateFieldTypes(body, meta.schema);
     }
 
     const newItem: Record<string, unknown> = {
@@ -148,6 +166,8 @@ export class MockService {
           details: { invalidFields },
         });
       }
+
+      this.validateFieldTypes(bodyWithoutId, meta.schema);
     }
 
     const index = meta.data.findIndex((item) => String(item.id) === String(id));
@@ -223,6 +243,52 @@ export class MockService {
     return docs;
   }
 
+  private detectType(value: unknown): FieldType {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return 'array';
+    switch (typeof value) {
+      case 'string':
+        return 'string';
+      case 'number':
+        return 'number';
+      case 'boolean':
+        return 'boolean';
+      case 'object':
+        return 'object';
+      default:
+        return 'unknown';
+    }
+  }
+
+  private validateFieldTypes(
+    body: Record<string, unknown>,
+    schema: ResourceSchema,
+  ): void {
+    for (const [field, value] of Object.entries(body)) {
+      if (field === 'id') continue;
+
+      const definition = schema[field];
+      if (!definition) continue;
+
+      const expectedType = definition.type;
+      const receivedType = this.detectType(value);
+
+      if (expectedType === 'unknown' || expectedType === 'null') continue;
+
+      if (receivedType !== expectedType) {
+        throw new BadRequestException({
+          success: false,
+          error: 'Type validation failed',
+          details: {
+            field,
+            expected: expectedType,
+            received: receivedType,
+          },
+        });
+      }
+    }
+  }
+
   private inferSchema(items: Record<string, unknown>[]): ResourceSchema {
     if (items.length === 0) {
       return {};
@@ -236,20 +302,7 @@ export class MockService {
         continue;
       }
 
-      let type: FieldType;
-      switch (typeof value) {
-        case 'number':
-          type = 'number';
-          break;
-        case 'boolean':
-          type = 'boolean';
-          break;
-        case 'string':
-          type = 'string';
-          break;
-        default:
-          type = 'unknown';
-      }
+      const type = this.detectType(value);
 
       schema[fieldName] = { type, required: true };
     }
@@ -307,6 +360,15 @@ export class MockService {
           break;
         case 'boolean':
           example[fieldName] = false;
+          break;
+        case 'object':
+          example[fieldName] = {};
+          break;
+        case 'array':
+          example[fieldName] = [];
+          break;
+        case 'null':
+          example[fieldName] = null;
           break;
         default:
           example[fieldName] = 'string';
