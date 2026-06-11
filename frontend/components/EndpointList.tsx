@@ -78,19 +78,19 @@ function buildCurlExamples(
 
   return [
     {
-      label: 'GET todos',
+      label: 'GET all',
       command: `curl ${base}`,
     },
     {
-      label: 'POST crear',
+      label: 'POST create',
       command: `curl -X POST ${base} \\\n  -H "Content-Type: application/json" \\\n  -d '${postBody}'`,
     },
     {
-      label: 'GET por ID',
+      label: 'GET by ID',
       command: `curl ${base}/1`,
     },
     {
-      label: 'PUT actualizar',
+      label: 'PUT update',
       command: `curl -X PUT ${base}/1 \\\n  -H "Content-Type: application/json" \\\n  -d '${putBody}'`,
     },
     {
@@ -150,11 +150,11 @@ export default function EndpointList({
     return (
       <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-6 py-12 text-center">
         <p className="text-lg font-medium text-zinc-700">
-          No hay endpoints generados
+          No endpoints generated
         </p>
         <p className="mt-2 text-sm text-zinc-500">
-          Pega un JSON válido en el editor y haz clic en &quot;Generar API&quot;
-          para ver los endpoints disponibles.
+          Paste valid JSON in the editor and click &quot;Generate API&quot; to
+          see available endpoints.
         </p>
       </div>
     );
@@ -162,8 +162,12 @@ export default function EndpointList({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-lg border border-zinc-200 bg-white p-4">
-        <p className="text-sm font-medium text-zinc-600">🔗 Base URL</p>
+      <div className="rounded-lg border border-zinc-200 bg-white p-5">
+        <p className="text-base font-semibold text-zinc-900">
+          Your API is ready
+        </p>
+
+        <p className="mt-4 text-sm font-medium text-zinc-600">Base URL</p>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <code className="flex-1 break-all font-mono text-sm text-zinc-900">
             {mockBaseUrl}
@@ -173,9 +177,14 @@ export default function EndpointList({
             onClick={() => copyToClipboard(mockBaseUrl, 'mock-base-url')}
             className="rounded border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
           >
-            {copiedKey === 'mock-base-url' ? '¡Copiado!' : 'Copy'}
+            {copiedKey === 'mock-base-url' ? 'Copied' : 'Copy'}
           </button>
         </div>
+
+        <p className="mt-3 text-xs text-zinc-400">
+          Use this base URL combined with the endpoints below. Example: GET{' '}
+          {mockBaseUrl}/users
+        </p>
       </div>
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
@@ -196,13 +205,13 @@ export default function EndpointList({
           onClick={() => copyToClipboard(sessionId, 'session')}
           className="rounded border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
         >
-          {copiedKey === 'session' ? '¡Copiado!' : 'Copiar'}
+          {copiedKey === 'session' ? 'Copied' : 'Copy'}
         </button>
       </div>
 
       {docsError && (
         <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-          No se pudo cargar la documentación: {docsError}
+          Failed to load documentation: {docsError}
         </p>
       )}
 
@@ -224,11 +233,11 @@ export default function EndpointList({
                 </h3>
                 {hasSchema ? (
                   <p className="mt-1 text-sm text-zinc-600">
-                    Campos: {formatFieldsList(resourceDocs.fields)}
+                    Fields: {formatFieldsList(resourceDocs.fields)}
                   </p>
                 ) : (
                   <p className="mt-1 text-sm italic text-zinc-500">
-                    Acepta cualquier estructura
+                    Accepts any structure
                   </p>
                 )}
               </div>
@@ -256,14 +265,14 @@ export default function EndpointList({
                           }
                           className="rounded border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
                         >
-                          {copiedKey === key ? '¡Copiado!' : 'Copiar'}
+                          {copiedKey === key ? 'Copied' : 'Copy'}
                         </button>
                       </div>
 
                       {endpoint.showPostBody && hasSchema && resourceDocs && (
                         <div className="mt-2 ml-16">
                           <p className="mb-1 text-xs text-zinc-500">
-                            └─ Body requerido:
+                            └─ Required fields:
                           </p>
                           <pre className="overflow-x-auto rounded-md bg-zinc-900 px-3 py-2 font-mono text-xs text-zinc-100">
                             {formatJsonExample(resourceDocs.examplePost)}
@@ -274,7 +283,7 @@ export default function EndpointList({
                       {endpoint.showPutBody && hasSchema && resourceDocs && (
                         <div className="mt-2 ml-16">
                           <p className="mb-1 text-xs text-zinc-500">
-                            └─ Campos editables:
+                            └─ Editable fields:
                           </p>
                           <pre className="overflow-x-auto rounded-md bg-zinc-900 px-3 py-2 font-mono text-xs text-zinc-100">
                             {formatJsonExample(resourceDocs.examplePut)}
@@ -296,7 +305,7 @@ export default function EndpointList({
           onClick={() => setCurlOpen((open) => !open)}
           className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-zinc-800 hover:bg-zinc-50"
         >
-          <span>Ejemplos con curl</span>
+          <span>Curl examples</span>
           <span className="text-zinc-400">{curlOpen ? '▲' : '▼'}</span>
         </button>
 
@@ -338,7 +347,7 @@ export default function EndpointList({
                               }
                               className="rounded border border-zinc-600 px-2 py-0.5 text-xs text-zinc-300 hover:bg-zinc-800"
                             >
-                              {copiedKey === curlKey ? '¡Copiado!' : 'Copiar'}
+                              {copiedKey === curlKey ? 'Copied' : 'Copy'}
                             </button>
                           </div>
                           <pre className="overflow-x-auto font-mono text-xs text-zinc-100 whitespace-pre-wrap">
@@ -354,7 +363,6 @@ export default function EndpointList({
           </div>
         )}
       </div>
-
     </div>
   );
 }

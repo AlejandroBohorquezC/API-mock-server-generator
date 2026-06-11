@@ -1,4 +1,11 @@
-export type FieldType = 'string' | 'number' | 'boolean' | 'unknown';
+export type FieldType =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'object'
+  | 'array'
+  | 'null'
+  | 'unknown';
 
 export interface FieldDefinition {
   type: FieldType;

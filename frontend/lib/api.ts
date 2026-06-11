@@ -1,25 +1,48 @@
 import type { ApiResponse, ResourceDocs } from '@/types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+const COLD_START_TIMEOUT_MS = 65_000;
 
 export async function registerSchema(
   sessionId: string,
   schema: Record<string, unknown[]>,
+  onColdStart?: () => void,
 ): Promise<{ endpoints: string[] }> {
-  const response = await fetch(`${BASE_URL}/mock/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId, schema }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), COLD_START_TIMEOUT_MS);
 
-  const result: ApiResponse<{ sessionId: string; endpoints: string[] }> =
-    await response.json();
+  const coldStartTimer = setTimeout(() => {
+    onColdStart?.();
+  }, 5_000);
 
-  if (!response.ok || !result.success || !result.data) {
-    throw new Error(result.error ?? 'Failed to register schema');
+  try {
+    const response = await fetch(`${BASE_URL}/mock/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, schema }),
+      signal: controller.signal,
+    });
+    clearTimeout(coldStartTimer);
+
+    const result: ApiResponse<{ sessionId: string; endpoints: string[] }> =
+      await response.json();
+
+    if (!response.ok || !result.success || !result.data) {
+      throw new Error(result.error ?? 'Failed to register schema');
+    }
+
+    return { endpoints: result.data.endpoints };
+  } catch (error) {
+    clearTimeout(coldStartTimer);
+    if ((error as Error).name === 'AbortError') {
+      throw new Error(
+        'Request timed out. The server may be unavailable. Please try again.',
+      );
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return { endpoints: result.data.endpoints };
 }
 
 export async function fetchDocs(

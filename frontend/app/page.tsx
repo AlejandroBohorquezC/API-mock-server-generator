@@ -42,6 +42,10 @@ export default function Home() {
     setStep('editor');
   };
 
+  const handleBackToLanding = () => {
+    setStep('landing');
+  };
+
   if (step === 'landing') {
     return (
       <div className="min-h-screen bg-[#0f0f0f] text-zinc-100">
@@ -121,29 +125,47 @@ export default function Home() {
             API Mock Server Generator
           </h1>
           <p className="mt-2 text-zinc-600">
-            Pega tu JSON y obtén una API REST funcional al instante.
+            Paste your JSON and get a working REST API instantly.
           </p>
         </div>
       </header>
 
       <main className="mx-auto max-w-4xl px-6 py-8">
         {step === 'editor' && (
-          <JsonEditor
-            key={editorInitialValue ?? 'default'}
-            onSuccess={handleSuccess}
-            initialValue={editorInitialValue}
-          />
+          <div className="flex flex-col gap-6">
+            <button
+              type="button"
+              onClick={handleBackToLanding}
+              className="self-start rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+            >
+              ← Back
+            </button>
+            <JsonEditor
+              key={editorInitialValue ?? 'default'}
+              onSuccess={handleSuccess}
+              initialValue={editorInitialValue}
+            />
+          </div>
         )}
 
         {step === 'endpoints' && (
           <div className="flex flex-col gap-6">
-            <button
-              type="button"
-              onClick={handleNewApi}
-              className="self-start rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
-            >
-              ← Nueva API
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleNewApi}
+                className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+              >
+                ← New API
+              </button>
+              <button
+                type="button"
+                onClick={handleBackToLanding}
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-500 transition-colors hover:bg-zinc-50"
+              >
+                ← Home
+              </button>
+            </div>
             <EndpointList endpoints={endpoints} sessionId={sessionId} />
           </div>
         )}
